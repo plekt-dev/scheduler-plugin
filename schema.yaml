@@ -1,0 +1,114 @@
+version: "1"
+tables:
+  - name: jobs
+    columns:
+      - name: id
+        type: INTEGER
+        primary_key: true
+        auto_increment: true
+        not_null: true
+      - name: name
+        type: TEXT
+        not_null: true
+      - name: cron_expr
+        type: TEXT
+        not_null: true
+      - name: timezone
+        type: TEXT
+        not_null: true
+        default: "''"
+      - name: prompt
+        type: TEXT
+        not_null: true
+        default: "''"
+      - name: agent_id
+        type: TEXT
+        not_null: true
+        default: "''"
+      - name: task_id
+        type: INTEGER
+      - name: delivery
+        type: TEXT
+        not_null: true
+        default: "'eventbus'"
+      - name: enabled
+        type: INTEGER
+        not_null: true
+        default: "1"
+      - name: next_fire_at
+        type: TEXT
+      - name: last_run_at
+        type: TEXT
+      - name: last_run_status
+        type: TEXT
+      - name: last_error
+        type: TEXT
+      - name: last_duration_ms
+        type: INTEGER
+      - name: created_at
+        type: TEXT
+        not_null: true
+      - name: updated_at
+        type: TEXT
+        not_null: true
+    indexes:
+      # Unique-by-name is encoded as a unique index because the schema loader
+      # does not support column-level UNIQUE constraints.
+      - name: idx_jobs_name_unique
+        columns: [name]
+        unique: true
+      - name: idx_jobs_enabled
+        columns: [enabled]
+      - name: idx_jobs_next_fire_at
+        columns: [next_fire_at]
+      - name: idx_jobs_agent_id
+        columns: [agent_id]
+      - name: idx_jobs_task_id
+        columns: [task_id]
+
+  - name: job_runs
+    columns:
+      - name: id
+        type: INTEGER
+        primary_key: true
+        auto_increment: true
+        not_null: true
+      - name: job_id
+        type: INTEGER
+        not_null: true
+        # FK with ON DELETE CASCADE: deleting a jobs row automatically removes
+        # its run history. Enforced at runtime by the loader's SQLite factory,
+        # which opens every per-plugin DB with `PRAGMA foreign_keys = ON`.
+        references:
+          table: jobs
+          column: id
+          on_delete: CASCADE
+      - name: triggered_at
+        type: TEXT
+        not_null: true
+      - name: manual
+        type: INTEGER
+        not_null: true
+        default: "0"
+      - name: status
+        type: TEXT
+        not_null: true
+      - name: error
+        type: TEXT
+      - name: duration_ms
+        type: INTEGER
+        not_null: true
+        default: "0"
+      - name: output
+        type: TEXT
+      - name: dispatch_status
+        type: TEXT
+        not_null: true
+        default: "'pending'"
+    indexes:
+      - name: idx_job_runs_job_id
+        columns: [job_id]
+      - name: idx_job_runs_triggered_at
+        columns: [triggered_at]
+      - name: idx_job_runs_status
+        columns: [status]

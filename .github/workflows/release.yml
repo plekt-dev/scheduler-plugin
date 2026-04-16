@@ -1,0 +1,94 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - '[0-9]+.[0-9]+.[0-9]+'
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    environment: release-signing
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
+        with:
+          fetch-depth: 100
+      - name: Verify tag is on main
+        run: |
+          git fetch origin main --depth=100
+          if ! git merge-base --is-ancestor ${{ github.sha }} origin/main; then
+            echo "::error::Tag ${{ github.ref_name }} (${{ github.sha }}) is not reachable from main. Releases must be tagged on merged commits."
+            exit 1
+          fi
+          echo "tag verified on main"
+
+      - name: Setup Go
+        uses: actions/setup-go@4a3601121dd01d1626a1e23e37211e3254c1c06c  # v6.4.0
+        with:
+          go-version: '1.25'
+
+      # Install release tools from plekt-dev/release-tools (public GitHub repo,
+      # stdlib-only, contains no secrets). Pin version to avoid surprises.
+      - name: Install release tools
+        env:
+          TOOLS_VERSION: latest
+        run: |
+          go install github.com/plekt-dev/release-tools/cmd/sign-with-key@${TOOLS_VERSION}
+          go install github.com/plekt-dev/release-tools/cmd/build-plugin@${TOOLS_VERSION}
+          echo "$(go env GOPATH)/bin" >> $GITHUB_PATH
+
+      - name: Build plugin.wasm
+        env:
+          GOOS: wasip1
+          GOARCH: wasm
+        run: go build -buildmode=c-shared -o plugin.wasm .
+
+      - name: Sign mcp.yaml
+        env:
+          SIGNING_KEY: ${{ secrets.PLEKT_SIGNING_KEY }}
+        run: |
+          if [ -z "$SIGNING_KEY" ]; then
+            echo "::error::PLEKT_SIGNING_KEY secret is not set in the release-signing environment"
+            exit 1
+          fi
+          echo "$SIGNING_KEY" > /tmp/signing.key
+          chmod 600 /tmp/signing.key
+          sign-with-key /tmp/signing.key mcp.yaml
+          shred -u /tmp/signing.key
+
+      - name: Build .mcpkg
+        id: package
+        run: |
+          PLUGIN_NAME=$(jq -r '.name' manifest.json)
+          PLUGIN_VERSION=$(jq -r '.version' manifest.json)
+          if [ "$PLUGIN_VERSION" != "${{ github.ref_name }}" ]; then
+            echo "::error::manifest.json version ($PLUGIN_VERSION) != tag (${{ github.ref_name }})"
+            exit 1
+          fi
+          build-plugin . --out /tmp/${PLUGIN_NAME}.mcpkg
+          SHA=$(sha256sum /tmp/${PLUGIN_NAME}.mcpkg | cut -d' ' -f1)
+          SIZE=$(stat -c%s /tmp/${PLUGIN_NAME}.mcpkg)
+          echo "name=${PLUGIN_NAME}" >> $GITHUB_OUTPUT
+          echo "sha=${SHA}" >> $GITHUB_OUTPUT
+          echo "size=${SIZE}" >> $GITHUB_OUTPUT
+          echo "path=/tmp/${PLUGIN_NAME}.mcpkg" >> $GITHUB_OUTPUT
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@b4309332981a82ec1c5618f44dd2e27cc8bfbfda  # v3.0.0
+        with:
+          tag_name: ${{ github.ref_name }}
+          files: ${{ steps.package.outputs.path }}
+          append_body: true
+          body: |
+
+            ---
+            ### Build metadata
+
+            - **SHA-256**: `${{ steps.package.outputs.sha }}`
+            - **Size**: ${{ steps.package.outputs.size }} bytes
+            - **Signing key**: per-repo (see [`PUBLIC_KEY`](./PUBLIC_KEY))
+            - **Package**: `${{ steps.package.outputs.name }}.mcpkg`

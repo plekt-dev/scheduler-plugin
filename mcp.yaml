@@ -1,0 +1,95 @@
+tools:
+  - name: list_jobs
+    description: List scheduled jobs with optional filters (enabled_only, agent_id) and pagination (limit, offset). Returns jobs ordered by id DESC plus the unfiltered total count.
+    input_schema:
+      type: object
+      properties:
+        enabled_only:
+          type: boolean
+        agent_id:
+          type: string
+        limit:
+          type: integer
+          minimum: 0
+        offset:
+          type: integer
+          minimum: 0
+  - name: get_job
+    description: Fetch one job by id together with its 10 most recent runs.
+    input_schema:
+      type: object
+      required: [id]
+      properties:
+        id:
+          type: integer
+  - name: create_job
+    description: Create a new scheduled job. Validates the cron expression via the host validator, computes the first fire time, and inserts the row. Emits scheduler.job.created. Required fields-name, cron_expr (5-field POSIX cron), prompt, agent_id. Optional-timezone (IANA, defaults to Europe/Berlin), task_id, enabled (defaults to true).
+    input_schema:
+      type: object
+      required: [name, cron_expr, prompt, agent_id]
+      properties:
+        name:
+          type: string
+        cron_expr:
+          type: string
+        prompt:
+          type: string
+        agent_id:
+          type: string
+        timezone:
+          type: string
+        task_id:
+          type: integer
+        enabled:
+          type: boolean
+  - name: update_job
+    description: Partial update of an existing job. Any field omitted is left unchanged. Pass task_id=-1 to clear the task linkage. If cron_expr or timezone change, the next fire time is automatically recomputed. Emits scheduler.job.updated.
+    input_schema:
+      type: object
+      required: [id]
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        cron_expr:
+          type: string
+        prompt:
+          type: string
+        agent_id:
+          type: string
+        timezone:
+          type: string
+        task_id:
+          type: integer
+        enabled:
+          type: boolean
+  - name: delete_job
+    description: Delete a job and all of its run history. Emits scheduler.job.deleted. Returns the count of run rows that were removed.
+    input_schema:
+      type: object
+      required: [id]
+      properties:
+        id:
+          type: integer
+  - name: trigger_job_now
+    description: Queue an immediate firing of a job, bypassing its enabled flag and schedule. The plugin emits scheduler.trigger.requested and the core engine performs the actual firing. Returns the run_id of the placeholder run row inserted by the plugin.
+    input_schema:
+      type: object
+      required: [id]
+      properties:
+        id:
+          type: integer
+  - name: validate_cron
+    description: Validate a 5-field cron expression in the given IANA timezone and return up to five upcoming fire times as RFC3339 UTC strings. Read-only; does not create a job. Used by the New Job and Edit Job dialogs to preview the schedule.
+    input_schema:
+      type: object
+      required: [expression]
+      properties:
+        expression:
+          type: string
+        timezone:
+          type: string
+signature:
+  public_key: 00a60d74e701ae03a7ab38fde6a67c279dd21d390c085d621285c4f49ef393fa
+  signature: 79e88063a906635280211ba72a8aaf908b161d36de98dffa175e11c7f28d0ccd3544ece9ac71b633cfa56e45b244e47c85722aaf6602a893ffe63086d821a60a

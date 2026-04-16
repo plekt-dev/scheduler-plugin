@@ -1,0 +1,17 @@
+*.exe
+*.dll
+*.so
+*.dylib
+*.wasm
+*.db
+*.db-journal
+*.db-shm
+*.db-wal
+.env
+.env.*
+.idea/
+.vscode/
+*.swp
+*~
+dist/
+*.mcpkg

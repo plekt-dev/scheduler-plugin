@@ -1,0 +1,163 @@
+{
+  "name": "scheduler-plugin",
+  "version": "1.0.0",
+  "description": "Schedule recurring prompts, dispatch them to chosen agents, track every fire and run. Week, month, and list views, seven MCP tools.",
+  "author": "Plekt",
+  "license": "MIT",
+  "min_core_version": "1.0.0",
+  "events": {
+    "emits": [
+      "scheduler.job.created",
+      "scheduler.job.updated",
+      "scheduler.job.deleted",
+      "scheduler.trigger.requested"
+    ],
+    "subscribes": [
+      "scheduler.job.fired",
+      "scheduler.run.completed"
+    ]
+  },
+  "mcp": {
+    "tools": [
+      {
+        "name": "list_jobs",
+        "description": "List scheduled jobs with optional filters. Returns jobs ordered by id DESC plus the unfiltered total count.",
+        "input_schema": {
+          "type": "object",
+          "properties": {
+            "enabled_only": { "type": "boolean", "description": "If true, only return enabled jobs." },
+            "agent_id":     { "type": "string",  "description": "Filter jobs by their assignee agent id." },
+            "limit":        { "type": "integer", "minimum": 0 },
+            "offset":       { "type": "integer", "minimum": 0 }
+          }
+        }
+      },
+      {
+        "name": "get_job",
+        "description": "Fetch one job by id together with its 10 most recent runs.",
+        "input_schema": {
+          "type": "object",
+          "required": ["id"],
+          "properties": {
+            "id": { "type": "integer", "description": "Job id." }
+          }
+        }
+      },
+      {
+        "name": "create_job",
+        "description": "Create a new scheduled job. Validates the cron expression, computes the first fire time, and inserts the row. Emits scheduler.job.created.",
+        "input_schema": {
+          "type": "object",
+          "required": ["name", "cron_expr", "prompt", "agent_id"],
+          "properties": {
+            "name":      { "type": "string", "description": "Human-readable job name." },
+            "cron_expr": { "type": "string", "description": "Five-field POSIX cron expression (e.g. '0 9 * * *')." },
+            "prompt":    { "type": "string", "description": "Prompt the assignee agent will receive when the job fires." },
+            "agent_id":  { "type": "string", "description": "Identifier of the agent that will execute the prompt." },
+            "timezone":  { "type": "string", "description": "IANA timezone for the cron expression. Defaults to Europe/Berlin." },
+            "task_id":   { "type": "integer", "description": "Optional task id to link this job to." },
+            "enabled":   { "type": "boolean", "description": "Whether the job is active. Defaults to true." }
+          }
+        }
+      },
+      {
+        "name": "update_job",
+        "description": "Partial-update an existing job. Any field omitted is left unchanged. Pass task_id=-1 to clear the task linkage. If cron_expr or timezone change, the next_fire_at is recomputed automatically. Emits scheduler.job.updated.",
+        "input_schema": {
+          "type": "object",
+          "required": ["id"],
+          "properties": {
+            "id":        { "type": "integer" },
+            "name":      { "type": "string" },
+            "cron_expr": { "type": "string" },
+            "prompt":    { "type": "string" },
+            "agent_id":  { "type": "string" },
+            "timezone":  { "type": "string" },
+            "task_id":   { "type": "integer", "description": "Pass -1 to clear the task linkage." },
+            "enabled":   { "type": "boolean" }
+          }
+        }
+      },
+      {
+        "name": "delete_job",
+        "description": "Delete a job and all of its run history. Emits scheduler.job.deleted.",
+        "input_schema": {
+          "type": "object",
+          "required": ["id"],
+          "properties": {
+            "id": { "type": "integer" }
+          }
+        }
+      },
+      {
+        "name": "trigger_job_now",
+        "description": "Queue an immediate firing of a job, bypassing its enabled flag and schedule. Emits scheduler.trigger.requested for the engine to pick up.",
+        "input_schema": {
+          "type": "object",
+          "required": ["id"],
+          "properties": {
+            "id": { "type": "integer" }
+          }
+        }
+      },
+      {
+        "name": "validate_cron",
+        "description": "Validate a 5-field cron expression in the given IANA timezone and return up to five upcoming fire times. Read-only: does not create a job. Used by the New Job and Edit Job dialogs to preview the schedule.",
+        "input_schema": {
+          "type": "object",
+          "required": ["expression"],
+          "properties": {
+            "expression": { "type": "string" },
+            "timezone":   { "type": "string", "description": "IANA timezone (e.g. Europe/Berlin). Empty string means UTC." }
+          }
+        }
+      }
+    ],
+    "resources": []
+  },
+  "dashboard": {
+    "widgets": []
+  },
+  "ui": {
+    "pages": [
+      {
+        "id": "scheduler_week",
+        "title": "Schedule",
+        "icon": "calendar",
+        "data_function": "get_scheduler_week",
+        "page_type": "scheduler_week",
+        "nav_order": 40,
+        "frontend": {
+          "js_file": "plugin.js",
+          "css_file": "plugin.css"
+        }
+      },
+      {
+        "id": "scheduler_month",
+        "title": "Month",
+        "icon": "calendar-month",
+        "data_function": "get_scheduler_month",
+        "page_type": "scheduler_month",
+        "nav_parent": "scheduler-plugin:scheduler_week",
+        "nav_order": 1,
+        "frontend": {
+          "js_file": "plugin.js",
+          "css_file": "plugin.css"
+        }
+      },
+      {
+        "id": "scheduler_list",
+        "title": "List",
+        "icon": "list",
+        "data_function": "get_scheduler_list",
+        "page_type": "scheduler_list",
+        "nav_parent": "scheduler-plugin:scheduler_week",
+        "nav_order": 2,
+        "frontend": {
+          "js_file": "plugin.js",
+          "css_file": "plugin.css"
+        }
+      }
+    ]
+  }
+}
